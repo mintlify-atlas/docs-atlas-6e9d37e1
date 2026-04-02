@@ -1,0 +1,95 @@
+---
+title: 'CI workflows'
+description: 'How continuous integration keeps the test suite healthy'
+---
+
+WASI Testsuite uses GitHub Actions to compile tests, validate them against supported runtimes, publish precompiled binaries, and record daily results. This page describes each workflow and what you can expect to see on your pull request.
+
+## Workflow overview
+
+The repository contains five workflows:
+
+| Workflow file | Trigger | Purpose |
+|--------------|---------|---------|
+| `compile-tests.yml` | Push to `main`, PRs touching `tests/` | Compiles all test suites and runs them against wasmtime |
+| `test-runner.yml` | Push or PR touching `test-runner/` | Lints and unit-tests the Python test runner itself |
+| `daily-runtime-validation.yml` | Daily cron at 00:00 UTC | Runs the full suite against five runtimes and publishes results |
+| `daily-test-update.yml` | Daily cron at 00:00 UTC | Pulls in updated proposal tests from upstream |
+| `markdown-linter.yml` | Push and PR | Checks all Markdown links for broken references |
+
+## The compile-tests workflow
+
+The `compile-tests` workflow is the primary CI gate for test contributions. It runs on every push to `main` and on any pull request that modifies files under `tests/` or the workflow file itself.
+
+<Steps>
+  <Step title="Build AssemblyScript tests">
+    Runs `tests/assemblyscript/build.py` using Node.js 22 across four platforms: `ubuntu-latest`, `macos-latest`, `windows-latest`, and `windows-11-arm`. The built binaries from Ubuntu are uploaded as the `assemblyscript-testsuite` artifact.
+  </Step>
+  <Step title="Build Rust tests">
+    Sets up both stable (`wasm32-wasip1`) and nightly (`wasm32-wasip2`) Rust toolchains, runs `cargo fmt --check` to enforce formatting, then runs `tests/rust/build.py` across all four platforms. The Ubuntu output is archived as `rust-testsuite.tar` and uploaded as the `rust-testsuite` artifact.
+  </Step>
+  <Step title="Build C tests">
+    Downloads the WASI SDK (version 27) for the target platform, checks C source formatting with `clang-format`, then compiles with `tests/c/build.py`. The Ubuntu binaries are uploaded as the `c-testsuite` artifact.
+  </Step>
+  <Step title="Run tests against wasmtime">
+    After all three build jobs complete, a matrix job downloads the compiled artifacts and runs them against `wasmtime` (dev channel) on all four platforms using the Python test runner:
+
+    ```bash
+    python3 run-tests --verbose --runtime-adapter adapters/wasmtime.py
+    ```
+
+    This job uses `continue-on-error: true`, so individual test failures are reported without blocking the workflow.
+  </Step>
+  <Step title="Publish precompiled binaries (main only)">
+    When the workflow runs on a push to `main` (not a pull request), the `upload_test_binaries` job checks out the `prod/testsuite-base` branch, merges in the new `main` changes, replaces the existing compiled binaries with the freshly built artifacts, and pushes the result. This keeps `prod/testsuite-base` up to date so users can clone it and run tests without compiling anything themselves.
+  </Step>
+</Steps>
+
+<Note>
+  The `upload_test_binaries` job only runs on push events to `main`. Pull requests from forks will build and test your changes but will not update `prod/testsuite-base`. That update happens after your PR is merged.
+</Note>
+
+## The daily runtime validation workflow
+
+Every day at midnight UTC, the `daily-runtime-validation` workflow runs the full test suite against five WASI runtimes sequentially (`max-parallel: 1`):
+
+- **wasmtime** — installed via the Bytecode Alliance action
+- **wasm-micro-runtime** — built from source with bulk memory and shared memory enabled
+- **wazero** — built from source using Go
+- **WasmEdge** — installed via the official install script
+- **pywasm** — installed via pip
+
+For each runtime, the workflow:
+
+1. Checks out `prod/testsuite-base` (which includes precompiled binaries).
+2. Runs the full suite with `--json-output-location results.json`.
+3. Commits `results.json` to `prod/daily-test-results` under `results/<runtime>/<timestamp>.json` and also overwrites `results/<runtime>/latest.json`.
+
+This means `prod/daily-test-results` accumulates a timestamped history of pass/fail results for every supported runtime. These results are intended to be published publicly to help users choose a runtime.
+
+## The test-runner workflow
+
+Changes to files under `test-runner/` trigger a separate validation workflow that treats the runner itself as a software project:
+
+- `mypy` for type checking
+- `flake8` for style linting
+- `pylint` for deeper static analysis
+- `coverage run` to execute the test runner's own unit tests
+
+If you modify the test runner, all four checks must pass before your PR can merge.
+
+## Checking CI on your pull request
+
+When you open a pull request, the `compile-tests` and `markdown-linter` workflows run automatically. You can monitor their progress in the **Checks** tab of the pull request.
+
+If the compile step fails:
+
+1. Click on the failing job to expand its log.
+2. Look for build errors in the language-specific build step (AssemblyScript, Rust, or C).
+3. Fix the issue in your branch and push again — the workflow re-runs automatically.
+
+<Tip>
+  To replicate CI builds locally before pushing, run `./build.py` from within the language directory you modified (for example, `tests/rust/build.py`). This requires the same toolchain that CI installs, but catches most build failures without waiting for GitHub Actions.
+</Tip>
+
+If the `run_tests` job reports failures, check whether the failure is in a test you modified or in an unrelated pre-existing failure. Because the job uses `continue-on-error: true`, a red result does not necessarily mean your change introduced a regression.

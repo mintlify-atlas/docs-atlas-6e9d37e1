@@ -1,0 +1,79 @@
+{
+  "projectType": "general",
+  "projectName": "WASI Testsuite",
+  "projectDescription": "A test suite and executor for validating WebAssembly System Interface (WASI) compliance across multiple runtimes.",
+  "theme": "aspen",
+  "primaryColor": "#8241e3",
+  "lightColor": "#b4a4f4",
+  "darkColor": "#93d6fb",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "branch-structure"
+            ]
+          },
+          {
+            "group": "Running Tests",
+            "pages": [
+              "running-tests/using-the-test-runner",
+              "running-tests/filtering-and-skipping",
+              "running-tests/precompiled-binaries"
+            ]
+          },
+          {
+            "group": "Writing Tests",
+            "pages": [
+              "writing-tests/overview",
+              "writing-tests/test-specification",
+              "writing-tests/building-tests"
+            ]
+          },
+          {
+            "group": "Runtime Adapters",
+            "pages": [
+              "adapters/overview",
+              "adapters/supported-runtimes",
+              "adapters/writing-an-adapter"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/guidelines",
+              "contributing/ci-workflows"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Test executor for running WASI tests against any WebAssembly runtime",
+    "Support for WASI preview 1 and preview 3",
+    "Runtime adapter system supporting wasmtime, wasmedge, wamr, wazero, pywasm, and wizard",
+    "Tests written in C, Rust, and AssemblyScript",
+    "Operation-based JSON test specification format",
+    "Precompiled test binaries for easy onboarding",
+    "Daily test results branch for tracking runtime compliance",
+    "Support for network proposals (HTTP, sockets)"
+  ],
+  "publicApiSurface": [
+    "run-tests CLI script",
+    "--runtime <adapter> flag",
+    "--exclude-filter <json> flag",
+    "Adapter API: get_name()",
+    "Adapter API: get_version()",
+    "Adapter API: get_wasi_versions()",
+    "Adapter API: get_wasi_worlds()",
+    "Adapter API: compute_argv(test_path, args_env_dirs, proposals, wasi_world, wasi_version)",
+    "JSON test spec: run, wait, read, connect, send, recv operations",
+    "JSON test spec: proposals field (http, sockets)"
+  ]
+}

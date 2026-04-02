@@ -1,0 +1,337 @@
+---
+title: "Test specification format"
+description: The JSON format that controls how each test case is executed and validated.
+---
+
+Each `.wasm` test binary can have an optional `.json` file with the same base name. This file tells the test runner how to invoke the binary, what environment to give it, and what results to expect. If no `.json` file is present, the runner uses a built-in default.
+
+## Two specification formats
+
+The test runner supports two formats. Both are valid, but the operation-based format is preferred for new tests.
+
+### Legacy format
+
+A flat object with top-level fields:
+
+```json
+{
+  "args": [],
+  "dirs": [],
+  "env": {},
+  "exit_code": 0,
+  "stderr": "",
+  "stdout": ""
+}
+```
+
+Any omitted field takes the default value shown above. The runner internally converts this to an equivalent sequence of `run`, `read`, and `wait` operations before executing.
+
+### Operation-based format
+
+An object with an `operations` array (and an optional `proposals` array):
+
+```json
+{
+  "proposals": [],
+  "operations": []
+}
+```
+
+This format gives you fine-grained control over each step, including multi-step network interactions. All new tests and tests that require WASI proposals should use this format.
+
+<Note>
+  When no `.json` file is present at all, the runner uses this default operation list:
+
+  ```json
+  {
+    "operations": [
+      { "type": "run" },
+      { "type": "wait" }
+    ]
+  }
+  ```
+</Note>
+
+## The `proposals` field
+
+`proposals` is an array of strings listing WASI proposals that the runtime must enable for the test to pass. Currently supported values are:
+
+- `"http"` — enables the WASI HTTP proposal
+- `"sockets"` — enables the WASI Sockets proposal
+
+```json
+{
+  "proposals": ["sockets"],
+  "operations": [...]
+}
+```
+
+## Operations reference
+
+Operations are executed sequentially. Each operation has a `type` field that determines its behaviour.
+
+---
+
+### `run`
+
+Starts the WASI module.
+
+<ParamField body="type" type="string" required>
+  Must be `"run"`.
+</ParamField>
+
+<ParamField body="args" type="string[]" default="[]">
+  Command-line arguments to pass to the WASI program.
+</ParamField>
+
+<ParamField body="env" type="object" default="{}">
+  Environment variables for the WASI program as key-value pairs. The WASI environment is constructed from exactly these keys; it does not inherit the shell environment.
+</ParamField>
+
+<ParamField body="dirs" type="string[]" default="[]">
+  Directory paths to add as WASI preopens. Paths are relative to the directory containing the `.wasm` file.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "run",
+  "args": [],
+  "env": {},
+  "dirs": []
+}
+```
+
+---
+
+### `wait`
+
+Waits for the module started by the preceding `run` to exit, then validates its exit code.
+
+<ParamField body="type" type="string" required>
+  Must be `"wait"`.
+</ParamField>
+
+<ParamField body="exit_code" type="number" default="0">
+  Expected exit code. The test fails if the actual exit code does not match.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "wait",
+  "exit_code": 0
+}
+```
+
+---
+
+### `read`
+
+Reads from a standard stream and validates its content against an expected payload.
+
+<ParamField body="type" type="string" required>
+  Must be `"read"`.
+</ParamField>
+
+<ParamField body="id" type="string" default="stdout">
+  Stream to read from. Accepted values: `"stdout"`, `"stderr"`.
+</ParamField>
+
+<ParamField body="payload" type="string" default="">
+  Expected content. The test fails if the stream content does not match.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "read",
+  "id": "stdout",
+  "payload": ""
+}
+```
+
+---
+
+### `connect`
+
+Establishes a connection from the test runner (acting as client) to the WASI module (acting as server). Before this operation runs, the module must have written its address to `stdout` in `<host>:<port>` format.
+
+<ParamField body="type" type="string" required>
+  Must be `"connect"`.
+</ParamField>
+
+<ParamField body="id" type="string" default="server">
+  A unique identifier for this connection. Use this ID in subsequent `send` and `recv` operations.
+</ParamField>
+
+<ParamField body="protocol_type" type="string" default="tcp">
+  Transport protocol. Accepted values: `"tcp"`, `"udp"`, `"http"`.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "connect",
+  "id": "server",
+  "protocol_type": "tcp"
+}
+```
+
+---
+
+### `send`
+
+Sends data over a previously established connection.
+
+<ParamField body="type" type="string" required>
+  Must be `"send"`.
+</ParamField>
+
+<ParamField body="id" type="string" required>
+  The connection identifier from the corresponding `connect` operation.
+</ParamField>
+
+<ParamField body="payload" type="string" default="">
+  Data to send.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "send",
+  "id": "<required>",
+  "payload": ""
+}
+```
+
+---
+
+### `recv`
+
+Receives data from a previously established connection and validates it.
+
+<ParamField body="type" type="string" required>
+  Must be `"recv"`.
+</ParamField>
+
+<ParamField body="id" type="string" required>
+  The connection identifier from the corresponding `connect` operation.
+</ParamField>
+
+<ParamField body="payload" type="string" default="">
+  Expected received data. The test fails if the actual data does not match.
+</ParamField>
+
+Default values:
+
+```json
+{
+  "type": "recv",
+  "id": "<required>",
+  "payload": ""
+}
+```
+
+---
+
+## Validation rules
+
+The runner enforces these rules when it loads a spec:
+
+1. Every `run` operation must be paired with a `wait` operation.
+2. `read`, `connect`, `send`, and `recv` operations must appear after a `run` operation.
+3. Connection IDs used in `connect` operations must be unique within a spec.
+4. Connection IDs referenced in `send` and `recv` operations must have been declared in a preceding `connect` operation.
+
+## Examples
+
+### Filesystem test
+
+A test that needs a preopened directory and passes command-line arguments to the binary. This is the pattern used by most tests in `tests/rust/wasm32-wasip1/`:
+
+```json
+{
+  "dirs": ["fs-tests.dir"],
+  "args": ["fs-tests.dir"]
+}
+```
+
+The same test expressed in operation-based format:
+
+```json
+{
+  "operations": [
+    {
+      "type": "run",
+      "dirs": ["fs-tests.dir"],
+      "args": ["fs-tests.dir"]
+    },
+    {
+      "type": "wait"
+    }
+  ]
+}
+```
+
+### Environment variables and arguments
+
+From `tests/rust/wasm32-wasip3/src/bin/cli-env.json`:
+
+```json
+{
+  "operations": [
+    {
+      "type": "run",
+      "env": {
+        "foo": "bar",
+        "baz": "42"
+      },
+      "args": ["a", "b", "42"]
+    },
+    {
+      "type": "wait"
+    }
+  ]
+}
+```
+
+### Network / socket test
+
+A TCP echo-server test where the runner connects, sends a message, and expects the same message back. From `tests/rust/wasm32-wasip3/src/bin/sockets-echo.json`:
+
+```json
+{
+  "proposals": ["sockets"],
+  "operations": [
+    {
+      "type": "run"
+    },
+    {
+      "type": "connect",
+      "id": "echo-server",
+      "protocol_type": "tcp"
+    },
+    {
+      "type": "send",
+      "id": "echo-server",
+      "payload": "Hello, world"
+    },
+    {
+      "type": "recv",
+      "id": "echo-server",
+      "payload": "Hello, world"
+    },
+    {
+      "type": "wait"
+    }
+  ]
+}
+```
+
+The module writes its `<host>:<port>` to stdout after binding; the runner reads that address and calls `connect` before the `send`/`recv` exchange.

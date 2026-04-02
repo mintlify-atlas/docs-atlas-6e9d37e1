@@ -1,80 +1,123 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Run your first WASI compliance tests in minutes."
 ---
 
-## Get started in three steps
+This guide walks you through cloning the repository, installing dependencies, and running the full WASI test suite against an available runtime.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- **Git** — to clone the repository.
+- **Python 3** and **pip** — the test runner is a Python script.
+- At least one supported WASI runtime installed and on your `PATH` (for example, `wasmtime`, `wasmedge`, or `wazero`). The runner detects available runtimes automatically.
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Run the test suite
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Clone the repository">
+    Use the `prod/testsuite-base` branch. Unlike `main`, this branch includes precompiled `.wasm` test binaries so you do not need a C or Rust compiler toolchain.
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+    cd wasi-testsuite
+    ```
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Install Python dependencies">
+    Install `python3` and `pip` if you do not have them. On Ubuntu/Debian:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    sudo apt install python3 python3-pip
+    ```
 
-### Step 3: Go live
+    Then install the test runner's Python dependencies:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    python3 -m pip install -r test-runner/requirements.txt
+    ```
+
+    The runner depends on `colorama` (for colored terminal output) and `requests`.
+  </Step>
+
+  <Step title="Run the tests">
+    Execute the test suite. By default, the runner detects every runtime it finds an adapter for in the `adapters/` directory and runs tests against all of them.
+
+    ```bash
+    ./run-tests
+    ```
+
+    The runner prints which runtimes it detected, then streams pass/fail results for each test case.
+  </Step>
+</Steps>
+
+## Target a specific runtime
+
+Pass `--runtime-adapter` (short flag: `-r`) with the path to an adapter file to run tests against a single runtime instead of all detected runtimes.
+
+```bash
+./run-tests --runtime-adapter adapters/wasmtime.py
+```
+
+Available adapters:
+
+| Adapter file | Runtime |
+|---|---|
+| `adapters/wasmtime.py` | wasmtime |
+| `adapters/wasmedge.py` | WasmEdge |
+| `adapters/wasm-micro-runtime.py` | WAMR (iwasm) |
+| `adapters/wazero.py` | wazero |
+| `adapters/pywasm.py` | pywasm |
+| `adapters/wizard.py` | Wizard |
+
+## Override the runtime binary
+
+Each adapter invokes a runtime binary by name (for example, `wasmtime`, `iwasm`). You can override the binary — or pass extra flags — by setting a corresponding environment variable.
+
+<Tip>
+  This is useful when you have multiple builds of a runtime installed, or when you need to enable experimental features for testing.
+</Tip>
+
+```bash
+# Use a specific wasmtime build and enable all Wasm features
+WASMTIME="wasmtime --wasm-features all" ./run-tests --runtime-adapter adapters/wasmtime.py
+
+# Point to a custom iwasm binary
+IWASM="/opt/custom-wamr/bin/iwasm" ./run-tests --runtime-adapter adapters/wasm-micro-runtime.py
+```
+
+The environment variable name matches the uppercase binary name the adapter normally calls (`WASMTIME`, `IWASM`, `WASMEDGE`, `WAZERO`, etc.).
+
+## Skip known-failing tests
+
+Use `--exclude-filter` to pass a JSON file listing tests to skip. An example filter file is provided in the repository:
+
+```bash
+./run-tests --exclude-filter examples/skip.json
+```
+
+You can pass `--exclude-filter` multiple times to layer several filter files.
+
+## Save results as JSON
+
+Pass `--json-output-location` to write structured test results to a file in addition to the console output:
+
+```bash
+./run-tests --json-output-location results.json
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Writing tests" icon="pen-to-square" href="/writing-tests/overview">
+    Add new WASI test cases in C or Rust to expand coverage.
+  </Card>
+  <Card title="Runtime adapters" icon="plug" href="/adapters/writing-an-adapter">
+    Write an adapter to run tests against a runtime not yet supported.
+  </Card>
+  <Card title="Branch structure" icon="code-branch" href="/branch-structure">
+    Understand the difference between `main`, `prod/testsuite-base`, and `prod/daily-test-results`.
+  </Card>
+  <Card title="Filtering and skipping" icon="filter" href="/running-tests/filtering-and-skipping">
+    Exclude tests or target a specific subset of the suite.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,118 @@
+---
+title: "Supported runtimes"
+description: Built-in adapters for popular WebAssembly runtimes.
+---
+
+The repository ships six adapters in the `adapters/` directory. Each adapter is a self-contained Python file. You select one at runtime with the `--runtime-adapter` flag.
+
+Every adapter reads its runtime binary path from an environment variable. Set that variable to override the default binary name, pass extra flags, or point to a non-`PATH` installation.
+
+<AccordionGroup>
+  <Accordion title="wasmtime">
+    **Adapter file:** `adapters/wasmtime.py`
+
+    **WASI versions supported:** `wasm32-wasip1`, `wasm32-wasip3`
+
+    wasmtime is Bytecode Alliance's production-grade WebAssembly runtime. It is the reference adapter for this testsuite and is the only built-in adapter that supports WASI preview 3.
+
+    **Override the binary with `WASMTIME`:**
+
+    ```bash
+    WASMTIME="wasmtime --wasm-features all" ./run-tests --runtime-adapter adapters/wasmtime.py
+    ```
+
+    The default value is `wasmtime`.
+  </Accordion>
+
+  <Accordion title="wasm-micro-runtime (WAMR)">
+    **Adapter file:** `adapters/wasm-micro-runtime.py`
+
+    **WASI versions supported:** `wasm32-wasip1`
+
+    WebAssembly Micro Runtime (WAMR) is a lightweight runtime from Bytecode Alliance, designed for embedded and resource-constrained environments. The adapter invokes the `iwasm` CLI.
+
+    **Override the binary with `IWASM`:**
+
+    ```bash
+    IWASM=/opt/wamr/bin/iwasm ./run-tests --runtime-adapter adapters/wasm-micro-runtime.py
+    ```
+
+    The default value is `iwasm`.
+  </Accordion>
+
+  <Accordion title="WasmEdge">
+    **Adapter file:** `adapters/wasmedge.py`
+
+    **WASI versions supported:** `wasm32-wasip1`
+
+    WasmEdge is a CNCF sandbox runtime optimized for edge computing and cloud-native workloads. It supports AOT compilation and is commonly embedded in container runtimes.
+
+    **Override the binary with `WASMEDGE`:**
+
+    ```bash
+    WASMEDGE=/usr/local/bin/wasmedge ./run-tests --runtime-adapter adapters/wasmedge.py
+    ```
+
+    The default value is `wasmedge`.
+  </Accordion>
+
+  <Accordion title="wazero">
+    **Adapter file:** `adapters/wazero.py`
+
+    **WASI versions supported:** `wasm32-wasip1`
+
+    wazero is a zero-dependency WebAssembly runtime written in Go. Because it has no CGo or native dependencies, it is easy to embed and cross-compile.
+
+    **Override the binary with `WAZERO`:**
+
+    ```bash
+    WAZERO=/home/user/go/bin/wazero ./run-tests --runtime-adapter adapters/wazero.py
+    ```
+
+    The default value is `wazero`.
+  </Accordion>
+
+  <Accordion title="pywasm">
+    **Adapter file:** `adapters/pywasm.py`
+
+    **WASI versions supported:** `wasm32-wasip1`
+
+    pywasm is a pure Python WebAssembly interpreter. It requires no native dependencies and is useful for environments where installing a compiled runtime is not practical, though it runs significantly slower than native runtimes.
+
+    The adapter invokes `tools/run-pywasm` — a wrapper script bundled in the repository — rather than a system binary. No additional environment variable override is needed; the path is resolved relative to the repository root automatically.
+
+    ```bash
+    ./run-tests --runtime-adapter adapters/pywasm.py
+    ```
+  </Accordion>
+
+  <Accordion title="Wizard">
+    **Adapter file:** `adapters/wizard.py`
+
+    **WASI versions supported:** `wasm32-wasip1`
+
+    Wizard Engine is a research WebAssembly runtime developed at Carnegie Mellon University. It focuses on fast interpretation and is used in academic and experimental contexts.
+
+    **Override the binary with `WIZARD`:**
+
+    ```bash
+    WIZARD=/opt/wizard/bin/wizeng ./run-tests --runtime-adapter adapters/wizard.py
+    ```
+
+    The default value is `wizard`.
+  </Accordion>
+</AccordionGroup>
+
+## Running tests against a specific runtime
+
+Pass `--runtime-adapter` (short flag: `-r`) with the path to the adapter file:
+
+```bash
+./run-tests --runtime-adapter adapters/wasmtime.py
+```
+
+To run against all available runtimes, omit `--runtime-adapter`. The runner loads every adapter it finds in the `adapters/` directory.
+
+## Adding a runtime not listed here
+
+If your runtime is not listed above, you can write a custom adapter. See [Writing a custom adapter](/adapters/writing-an-adapter) for the required interface and a complete example.

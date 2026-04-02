@@ -1,0 +1,76 @@
+---
+title: 'Contributing guidelines'
+description: 'How to contribute to WASI Testsuite — tests, adapters, and bug reports'
+---
+
+WASI Testsuite welcomes contributions of all kinds. Whether you want to add new tests, connect an external harness, support a new runtime, or report a bug, this page explains how to get started.
+
+## Ways to contribute
+
+<CardGroup cols={2}>
+  <Card title="Add a new test" icon="flask" href="/writing-tests/overview">
+    Write and submit a new WASI test case. Tests can be authored in C, Rust, or AssemblyScript and must follow the test specification format.
+  </Card>
+  <Card title="Add a runtime adapter" icon="plug" href="/adapters/writing-an-adapter">
+    Write a Python adapter so the test runner can execute tests against a WASI runtime that isn't yet supported.
+  </Card>
+  <Card title="Run with an external harness" icon="circle-play" href="/writing-tests/test-specification">
+    Use an external test harness with the test suite. The test specification is designed to be harness-agnostic, so you can plug in your own tooling.
+  </Card>
+  <Card title="Report a bug" icon="bug" href="https://github.com/WebAssembly/wasi-testsuite/issues">
+    Open an issue on the issue tracker. Include the runtime, operating system, and steps to reproduce the problem.
+  </Card>
+</CardGroup>
+
+## Before you start
+
+Read the existing tests in the `tests/` directory and the adapter implementations in `adapters/` to understand the conventions used throughout the project. For tests, the [writing tests overview](/writing-tests/overview) covers the expected structure in detail. For adapters, [writing an adapter](/adapters/writing-an-adapter) describes the required interface.
+
+## Branch structure
+
+All development work should target the `main` branch. This is the only branch you need to interact with when contributing.
+
+<Warning>
+  Do not open pull requests against `prod/testsuite-base` or `prod/daily-test-results`. These branches are maintained exclusively by CI automation and should never receive direct commits or PRs.
+</Warning>
+
+The three critical branches and their purposes:
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Active development. Target all pull requests here. |
+| `prod/testsuite-base` | Fork of `main` with precompiled test binaries included. Updated automatically by CI on every push to `main`. |
+| `prod/daily-test-results` | Daily test results for supported runtimes, published as JSON by the daily runtime validation workflow. |
+
+When you clone the repository for development, use `main`:
+
+```bash
+git clone https://github.com/WebAssembly/wasi-testsuite
+```
+
+When you want to run tests immediately without compiling them yourself, use `prod/testsuite-base`:
+
+```bash
+git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+```
+
+## Submitting a pull request
+
+1. Fork the repository and create a branch from `main`.
+2. Make your changes. If you are adding tests, ensure they build successfully with `./build.py` in the relevant language directory.
+3. Open a pull request against `main`. The `compile-tests` CI workflow will run automatically and build your tests across all supported platforms and operating systems.
+4. Address any review feedback. CI results will appear on the pull request page.
+
+## Using the issue tracker
+
+The [issue tracker](https://github.com/WebAssembly/wasi-testsuite/issues) is the right place for:
+
+- Bug reports against existing tests or the test runner
+- Proposals for new test cases or new runtime support
+- Questions about how the test specification works
+
+When filing a bug, include the runtime name and version, the operating system, the test that failed, and the output you observed.
+
+<Note>
+  The project scope is intentionally limited to WASI preview 1 and WASI preview 3 tests. Tests for other in-progress proposals or experimental APIs are out of scope for this repository — but the test runner can still execute them from external repositories. The [wasi-threads](https://github.com/WebAssembly/wasi-threads/tree/main/test) test suite is an example of an external test repo that works with this runner.
+</Note>

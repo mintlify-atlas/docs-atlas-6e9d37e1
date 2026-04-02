@@ -1,0 +1,123 @@
+---
+title: "Using the test runner"
+description: How to run WASI tests against a WebAssembly runtime using the wasi-testsuite test runner.
+---
+
+The test runner is a Python script (`run-tests`) at the root of the repository. It discovers available WASI runtimes via adapter files, then executes the compiled `.wasm` test binaries against them and reports the results.
+
+## Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    Use the `prod/testsuite-base` branch. This branch includes precompiled `.wasm` test binaries so you do not need a C or Rust compiler to get started.
+
+    ```bash
+    git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+    cd wasi-testsuite
+    ```
+  </Step>
+
+  <Step title="Install Python 3 and pip">
+    The test runner requires Python 3. On Ubuntu or Debian:
+
+    ```bash
+    sudo apt install python3 python3-pip
+    ```
+  </Step>
+
+  <Step title="Install the test runner dependencies">
+    ```bash
+    python3 -m pip install -r test-runner/requirements.txt
+    ```
+  </Step>
+
+  <Step title="Run the tests">
+    With at least one supported runtime on your `PATH`, run all tests:
+
+    ```bash
+    ./run-tests
+    ```
+
+    The runner scans the `adapters/` directory, checks which runtimes are available, and runs the full test suite against every detected runtime.
+  </Step>
+</Steps>
+
+## Target a specific runtime
+
+By default, the runner detects all available runtimes from the `adapters/` directory and tests against every one of them. Pass `--runtime-adapter` (short: `-r`) to limit the run to a single runtime.
+
+```bash
+./run-tests --runtime-adapter adapters/wasmtime.py
+```
+
+The available adapter files are:
+
+| Adapter | Runtime | Binary name |
+|---|---|---|
+| `adapters/wasmtime.py` | Wasmtime | `wasmtime` |
+| `adapters/wasmedge.py` | WasmEdge | `wasmedge` |
+| `adapters/wasm-micro-runtime.py` | WAMR | `iwasm` |
+| `adapters/wazero.py` | Wazero | `wazero` |
+| `adapters/pywasm.py` | pywasm | `pywasm` |
+| `adapters/wizard.py` | Wizard | `wizeng.x86-64-linux` |
+
+## Override the runtime binary
+
+Each adapter invokes a runtime binary by its standard name (for example, `wasmtime` or `iwasm`). You can override that binary — or inject extra flags — by setting the corresponding environment variable before running the tests.
+
+The variable name matches the uppercase binary name that the adapter normally calls.
+
+```bash
+# Enable all Wasm features on a specific wasmtime build
+WASMTIME="wasmtime --wasm-features all" ./run-tests --runtime-adapter adapters/wasmtime.py
+
+# Use a custom iwasm binary path
+IWASM="/opt/custom-wamr/bin/iwasm" ./run-tests --runtime-adapter adapters/wasm-micro-runtime.py
+```
+
+<Tip>
+  Environment variable overrides are useful when you have multiple builds of a runtime installed, need to enable experimental features, or want to test a locally compiled binary without modifying your `PATH`.
+</Tip>
+
+The full set of override variables mirrors the binary names:
+
+| Environment variable | Default binary | Adapter |
+|---|---|---|
+| `WASMTIME` | `wasmtime` | `adapters/wasmtime.py` |
+| `IWASM` | `iwasm` | `adapters/wasm-micro-runtime.py` |
+| `WASMEDGE` | `wasmedge` | `adapters/wasmedge.py` |
+| `WAZERO` | `wazero` | `adapters/wazero.py` |
+| `WIZARD` | `wizeng.x86-64-linux` | `adapters/wizard.py` |
+
+<Note>
+  The pywasm adapter does not use an environment variable override — it invokes the bundled `tools/run-pywasm` wrapper script directly.
+</Note>
+
+## Read the output
+
+The runner prints which runtimes it detected, then streams per-test results as it runs. Each test is reported as passed, failed, or skipped.
+
+```
+Detecting WASI runtime availability:
+  wasmtime.py: RuntimeMeta(...)
+
+WASI C tests / wasm32-wasip1
+  close-preopen    PASS
+  dir-seek         PASS
+  stat-dev-ino     SKIP
+  fd-readdir       PASS
+  ...
+```
+
+A non-zero exit code indicates that at least one test failed.
+
+## Additional options
+
+| Flag | Description |
+|---|---|
+| `--exclude-filter <file>` | Path to a JSON file listing tests to skip. Can be passed multiple times. |
+| `--json-output-location <file>` | Write structured test results to a JSON file in addition to console output. |
+| `--verbose` | Print additional detail about each test result. |
+| `--disable-colors` | Turn off ANSI color codes in console output. |
+
+See [Filtering and skipping](/running-tests/filtering-and-skipping) for details on the `--exclude-filter` format.

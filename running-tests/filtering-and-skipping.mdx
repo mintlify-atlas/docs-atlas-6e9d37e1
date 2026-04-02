@@ -1,0 +1,92 @@
+---
+title: "Filtering and skipping tests"
+description: Exclude known-failing tests or target specific test subsets using JSON filter files.
+---
+
+The test runner supports JSON-based exclude filters that let you skip individual tests by name. This is useful when a runtime has known limitations, when you are running a subset of tests in CI, or when you want to isolate a failure without removing the test from the suite.
+
+## The --exclude-filter flag
+
+Pass `--exclude-filter` with the path to a JSON filter file. The runner reads the file before executing and skips any matching test cases, reporting them as `SKIP` rather than running them.
+
+```bash
+./run-tests --exclude-filter examples/skip.json
+```
+
+You can pass `--exclude-filter` multiple times to layer several filter files. Each file's exclusions are applied independently.
+
+```bash
+./run-tests \
+  --exclude-filter examples/skip.json \
+  --exclude-filter my-runtime-skips.json
+```
+
+## The skip file format
+
+A skip file is a JSON object. The top-level keys are **suite names** and the values are objects mapping **test names** to **reason strings**.
+
+```json
+{
+  "<suite name>": {
+    "<test name>": "<reason string>"
+  }
+}
+```
+
+The suite name matches the `name` field from the suite's `manifest.json` (for example, `"WASI C tests"`). The test name is the `.wasm` filename without the extension (for example, `"stat-dev-ino"`). The reason string is a human-readable explanation recorded in the output; it is not validated by the runner.
+
+The bundled example at `examples/skip.json` looks like this:
+
+```json
+{
+  "WASI C tests": {
+    "stat-dev-ino": "d_ino is known broken in this combination of engine and wasi-sdk version."
+  }
+}
+```
+
+This file tells the runner to skip the `stat-dev-ino` test within the `WASI C tests` suite and to record the given explanation alongside the skip result.
+
+## Create a custom skip file
+
+The following example creates a skip file for a runtime that does not yet implement `sock_accept` or `poll_oneoff`.
+
+```json
+{
+  "WASI C tests": {
+    "sock-accept": "sock_accept not implemented in MyRuntime 1.0",
+    "poll-oneoff": "poll_oneoff not implemented in MyRuntime 1.0"
+  }
+}
+```
+
+Save the file (for example, as `my-runtime-skips.json`) and pass it when running tests:
+
+```bash
+./run-tests \
+  --runtime-adapter adapters/wasmtime.py \
+  --exclude-filter my-runtime-skips.json
+```
+
+The runner will skip both tests and continue without failing the overall run.
+
+<Tip>
+  Maintaining a skip file per runtime in your CI pipeline lets you run the full suite and track which tests are skipped over time — without blocking the build on known issues. As you fix limitations, remove entries from the skip file to ensure the newly passing tests are verified on every run.
+</Tip>
+
+## Automatic skipping
+
+In addition to JSON filters you provide, the runner applies a built-in filter automatically. It skips any test whose required WASI version or WASI world is not declared as supported by the runtime adapter. These skips are reported alongside your custom skips but do not require a filter file.
+
+## Skips in output
+
+Skipped tests appear in the console output with a `SKIP` status:
+
+```
+WASI C tests / wasm32-wasip1
+  close-preopen    PASS
+  stat-dev-ino     SKIP
+  fd-readdir       PASS
+```
+
+When you use `--json-output-location`, skipped tests are included in the JSON output with `"is_executed": false` so you can track them over time in CI artifacts.

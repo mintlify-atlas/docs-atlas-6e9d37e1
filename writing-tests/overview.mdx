@@ -1,0 +1,203 @@
+---
+title: "Writing tests"
+description: How to contribute new WASI test cases to the wasi-testsuite project.
+---
+
+Contributing a test involves three decisions: which language to use, which WASI version to target, and what the test needs at runtime. This page walks you through all three and ends with a complete end-to-end example.
+
+## Choose a language
+
+The two primary authoring languages are **C** and **Rust**, each with its own directory and toolchain.
+
+<CardGroup cols={2}>
+  <Card title="C" icon="c" href="/writing-tests/building-tests">
+    Tests live in `tests/c/src/`. A single source directory covers all WASI targets because C tests are written against a standard POSIX API — the toolchain handles the WASI version.
+  </Card>
+  <Card title="Rust" icon="rust" href="/writing-tests/building-tests">
+    Tests live in `tests/rust/<target>/src/bin/`. Because Rust tests call WASI APIs directly, each WASI version gets its own directory.
+  </Card>
+</CardGroup>
+
+Other WASI-targeting toolchains are welcome. When in doubt, follow the pattern of the existing tests.
+
+## Choose a WASI version
+
+| Target | Directory | Notes |
+|---|---|---|
+| `wasm32-wasip1` | `tests/rust/wasm32-wasip1/` | WASI preview 1 (0.1). Stable toolchain. |
+| `wasm32-wasip3` | `tests/rust/wasm32-wasip3/` | WASI preview 3 (0.3.0, pre-release). Uses nightly Rust and the `wasm32-wasip2` build triple until wasip3 is released. |
+
+C tests in `tests/c/src/` are compiled for each target separately — you write the test once and the build system handles both.
+
+## Directory structure
+
+```
+tests/
+├── c/
+│   ├── build.py
+│   └── src/
+│       ├── lseek.c
+│       ├── lseek.json          # optional spec file
+│       └── fs-tests.dir/       # preopened directory fixture
+└── rust/
+    ├── build.py
+    ├── wasm32-wasip1/
+    │   └── src/bin/
+    │       ├── fd_readdir.rs
+    │       ├── fd_readdir.json  # optional spec file
+    │       └── fs-tests.dir/
+    └── wasm32-wasip3/
+        └── src/bin/
+            ├── filesystem-stat.rs
+            ├── filesystem-stat.json
+            └── fs-tests.dir/
+```
+
+Each `.rs` or `.c` source file produces one `.wasm` test binary. An optional `.json` file with the same base name controls how the test runner executes and validates it. If no `.json` file is present, the runner uses a default spec that simply runs the binary and expects exit code `0`.
+
+See [Test specification format](/writing-tests/test-specification) for the full JSON reference, and [Building tests](/writing-tests/building-tests) for toolchain setup and build commands.
+
+## The .wasm / .json relationship
+
+The build scripts compile each source file to a `.wasm` binary and copy it — along with its `.json` spec and any fixture directories — into a generated `testsuite/<target>/` directory. The test runner then:
+
+1. Scans `testsuite/<target>/` for `*.wasm` files.
+2. For each binary, looks for a matching `.json` file.
+3. Executes the operations described in the spec (or the default `run` + `wait` if there is no spec).
+4. Passes the test if every operation's expectations are met.
+
+## End-to-end example
+
+The following example adds a WASIp3 Rust test that checks `stat` behaviour on a preopened directory.
+
+<Tabs>
+  <Tab title="Rust (wasip3)">
+    <Steps>
+      <Step title="Create the source file">
+        Add your test to `tests/rust/wasm32-wasip3/src/bin/filesystem-stat-subtlety.rs`:
+
+        ```rust
+        use std::process;
+        extern crate wit_bindgen;
+
+        wit_bindgen::generate!({
+            inline: r"
+          package test:test;
+          world test {
+              include wasi:filesystem/imports@0.3.0-rc-2026-03-15;
+              include wasi:cli/command@0.3.0-rc-2026-03-15;
+          }
+        ",
+            generate_all
+        });
+
+        use wasi::filesystem::types::{DescriptorType, PathFlags};
+
+        struct Component;
+        export!(Component);
+        impl exports::wasi::cli::run::Guest for Component {
+            async fn run() -> Result<(), ()> {
+                match &wasi::filesystem::preopens::get_directories()[..] {
+                    [(dir, dirname)] if dirname == "stat-working-dir" => {
+                        let stat = dir.stat().await.unwrap();
+                        assert_eq!(stat.type_, DescriptorType::Directory);
+                    }
+                    [..] => {
+                        eprintln!("usage: run with one open dir named 'stat-working-dir'");
+                        process::exit(1)
+                    }
+                };
+                Ok(())
+            }
+        }
+
+        fn main() { unreachable!("main is a stub"); }
+        ```
+      </Step>
+      <Step title="Create the fixture directory">
+        The test needs a preopened directory. Create it next to the source file:
+
+        ```bash
+        mkdir tests/rust/wasm32-wasip3/src/bin/stat-working-dir
+        ```
+      </Step>
+      <Step title="Create the JSON spec file">
+        Create `tests/rust/wasm32-wasip3/src/bin/filesystem-stat-subtlety.json` to declare the preopened directory:
+
+        ```json
+        {
+          "operations": [
+            {
+              "type": "run",
+              "dirs": ["stat-working-dir"]
+            },
+            {
+              "type": "wait"
+            }
+          ]
+        }
+        ```
+      </Step>
+      <Step title="Build and verify">
+        Run the Rust build script to compile and copy the test:
+
+        ```bash
+        python3 tests/rust/build.py --verbose
+        ```
+
+        The binary and spec appear in `tests/rust/testsuite/wasm32-wasip3/`.
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="C (wasip1)">
+    <Steps>
+      <Step title="Create the source file">
+        Add your test to `tests/c/src/filesystem-stat-subtlety.c`:
+
+        ```c
+        #include <assert.h>
+        #include <sys/stat.h>
+        #include <stdio.h>
+        #include <stdlib.h>
+
+        int main() {
+            struct stat st;
+            int ret = stat("stat-working-dir", &st);
+            assert(ret == 0);
+            assert(S_ISDIR(st.st_mode));
+            return EXIT_SUCCESS;
+        }
+        ```
+      </Step>
+      <Step title="Create the fixture directory">
+        ```bash
+        mkdir tests/c/src/stat-working-dir
+        ```
+      </Step>
+      <Step title="Create the JSON spec file">
+        Create `tests/c/src/filesystem-stat-subtlety.json`:
+
+        ```json
+        {
+          "dirs": ["stat-working-dir"]
+        }
+        ```
+
+        <Note>
+          This uses the legacy spec format. The build script converts it to operation-based format automatically. See [Test specification format](/writing-tests/test-specification) for both formats.
+        </Note>
+      </Step>
+      <Step title="Build and verify">
+        ```bash
+        python3 tests/c/build.py --verbose
+        ```
+
+        The binary and spec appear in `tests/c/testsuite/wasm32-wasip1/`.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Temporary files
+
+If your test creates files at runtime, name them with a `.cleanup` suffix when possible, and have the test remove them before exiting. The test runner automatically deletes `*.cleanup` files in a test's preopened directories both before and after each run, so stale artifacts from a previous failed run never block subsequent ones.

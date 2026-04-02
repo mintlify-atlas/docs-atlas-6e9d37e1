@@ -1,0 +1,67 @@
+---
+title: "Branch structure"
+description: "Understanding the repository's critical branches and when to use each one."
+---
+
+The wasi-testsuite repository uses a branching strategy that separates active development from stable, ready-to-use artifacts. Most contributors and runtime implementors only ever need to interact with one or two of these branches.
+
+<Warning>
+  The branches listed below are considered critical. They will never be force-updated or removed. Any other branch in the repository (feature branches, fix branches, etc.) does not carry this guarantee.
+</Warning>
+
+## Critical branches
+
+<CardGroup cols={2}>
+  <Card title="main" icon="code-branch">
+    The primary development branch. Contains the test runner source, test source code, build scripts, and CI workflows. Does **not** include precompiled `.wasm` binaries.
+  </Card>
+  <Card title="prod/testsuite-base" icon="box-archive">
+    A continuously updated fork of `main` that also includes precompiled `.wasm` test binaries. This is the branch to use when you want to run tests without setting up a compiler toolchain.
+  </Card>
+  <Card title="prod/daily-test-results" icon="chart-bar">
+    Updated daily by CI with structured test results for all supported runtimes. Intended for publication to a public results dashboard so users can compare runtime compliance at a glance.
+  </Card>
+</CardGroup>
+
+## Branch details
+
+### `main`
+
+`main` is where all development happens: new test cases, test runner improvements, adapter updates, and build script changes all land here first. It does not include the compiled `.wasm` binaries because large binary files slow down clones and create noise in diffs for contributors who do not need them.
+
+**Use `main` when you are:**
+- Adding or modifying test cases
+- Improving the test runner or an existing adapter
+- Writing a new runtime adapter
+- Working on build scripts or CI workflows
+
+### `prod/testsuite-base`
+
+`prod/testsuite-base` is automatically kept in sync with `main` by the `compile-tests` CI workflow. Every time a commit lands on `main`, the workflow compiles all tests and pushes a corresponding commit to `prod/testsuite-base` that includes the resulting `.wasm` files under `tests/*/testsuite/`.
+
+This means you get the latest tests and the latest binaries without having to install Rust, a C compiler, or any of the language-specific WASI SDKs.
+
+**Use `prod/testsuite-base` when you are:**
+- Running the test suite to validate a runtime
+- Integrating wasi-testsuite into a CI pipeline
+- Evaluating WASI compliance without modifying any tests
+
+```bash
+git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+```
+
+### `prod/daily-test-results`
+
+A scheduled CI job runs the full test suite each day against all supported runtimes and pushes structured results to this branch. The intent is to provide a public, versioned history of runtime compliance over time — useful for tracking regressions and for helping users choose a runtime.
+
+**Use `prod/daily-test-results` when you are:**
+- Reviewing historical compliance data for a specific runtime
+- Investigating when a test started failing on a particular runtime
+
+## Summary
+
+| Branch | Binaries included | Updated | Best for |
+|---|---|---|---|
+| `main` | No | On every PR merge | Development and contributions |
+| `prod/testsuite-base` | Yes | On every merge to `main` | Running tests, CI integration |
+| `prod/daily-test-results` | N/A (results only) | Daily by CI | Reviewing compliance history |

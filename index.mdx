@@ -1,97 +1,93 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "WASI Testsuite"
+description: "A test suite and executor for validating WebAssembly System Interface (WASI) compliance across multiple runtimes."
 ---
 
-## Setting up
+WASI Testsuite provides a comprehensive set of tests for the [WebAssembly System Interface (WASI)](https://github.com/WebAssembly/WASI) and a Python-based test runner that validates WASI compliance across any WebAssembly runtime. It covers WASI preview 1 and the forthcoming WASI preview 3.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first WASI compliance tests in minutes against any supported runtime.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Runtime adapters" icon="plug" href="/adapters/overview">
+    Connect any WASI runtime — wasmtime, wasmedge, wamr, wazero, and more.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Writing tests" icon="pen-to-square" href="/writing-tests/overview">
+    Contribute new WASI tests in C or Rust targeting preview 1 or preview 3.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Test specification" icon="file-code" href="/writing-tests/test-specification">
+    Learn the JSON format that controls how each test case is executed and validated.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get up and running
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Clone the repository">
+    Use the `prod/testsuite-base` branch which includes precompiled test binaries — no compiler toolchain required.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    ```bash
+    git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+    ```
+  </Step>
+  <Step title="Install the test runner">
+    Install Python 3 and the test runner dependencies.
 
-## Need inspiration?
+    ```bash
+    python3 -m pip install -r test-runner/requirements.txt
+    ```
+  </Step>
+  <Step title="Run the test suite">
+    Execute all tests against all available runtimes, or target a specific one.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    ```bash
+    # Run against all available runtimes
+    ./run-tests
+
+    # Run against a specific runtime
+    ./run-tests --runtime-adapter adapters/wasmtime.py
+    ```
+  </Step>
+</Steps>
+
+## Supported runtimes
+
+The test runner ships with adapters for six WebAssembly runtimes out of the box:
+
+<CardGroup cols={3}>
+  <Card title="wasmtime" icon="bolt" href="/adapters/supported-runtimes">
+    Bytecode Alliance's production-grade runtime
+  </Card>
+  <Card title="WasmEdge" icon="bolt" href="/adapters/supported-runtimes">
+    CNCF sandbox runtime for edge and cloud
+  </Card>
+  <Card title="WAMR" icon="bolt" href="/adapters/supported-runtimes">
+    WebAssembly Micro Runtime for embedded systems
+  </Card>
+  <Card title="wazero" icon="bolt" href="/adapters/supported-runtimes">
+    Zero-dependency runtime written in Go
+  </Card>
+  <Card title="pywasm" icon="bolt" href="/adapters/supported-runtimes">
+    Pure Python WebAssembly interpreter
+  </Card>
+  <Card title="Wizard" icon="bolt" href="/adapters/supported-runtimes">
+    Research runtime from Carnegie Mellon
+  </Card>
+</CardGroup>
+
+## What's covered
+
+<CardGroup cols={2}>
+  <Card title="Branch structure" icon="code-branch" href="/branch-structure">
+    Understand the `main`, `prod/testsuite-base`, and `prod/daily-test-results` branches.
+  </Card>
+  <Card title="Filtering and skipping" icon="filter" href="/running-tests/filtering-and-skipping">
+    Exclude known-failing tests or target specific test subsets.
+  </Card>
+  <Card title="Precompiled binaries" icon="box-archive" href="/running-tests/precompiled-binaries">
+    Use ready-to-run `.wasm` binaries without setting up a compiler toolchain.
+  </Card>
+  <Card title="Write a custom adapter" icon="wrench" href="/adapters/writing-an-adapter">
+    Integrate any WASI-compatible runtime into the test harness.
+  </Card>
+</CardGroup>

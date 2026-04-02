@@ -1,0 +1,47 @@
+---
+title: "Precompiled binaries"
+description: Use ready-to-run .wasm binaries without setting up a compiler toolchain.
+---
+
+The `prod/testsuite-base` branch includes precompiled `.wasm` test binaries so you can run the full suite without installing Rust, a C compiler, or any WASI SDK.
+
+<Note>
+  The `main` branch does not include precompiled binaries. It contains only test source code, build scripts, and the test runner itself. Binaries are kept on a separate branch to avoid slowing down contributor clones and to keep diffs readable for those working on the test runner or test source.
+</Note>
+
+## Where the binaries live
+
+On `prod/testsuite-base`, compiled binaries are placed under:
+
+```
+tests/*/testsuite/*.wasm
+```
+
+Each test suite directory under `tests/` has a `testsuite/` subdirectory containing one `.wasm` file per test case. The test runner discovers and executes these files automatically — you do not need to point it at them manually.
+
+## Clone the branch with binaries
+
+```bash
+git clone --branch prod/testsuite-base https://github.com/WebAssembly/wasi-testsuite
+cd wasi-testsuite
+```
+
+This gives you the full repository plus all precompiled binaries in a single step.
+
+## How the branch stays up to date
+
+The `upload_test_binaries` CI job runs automatically on every commit to `main`. It compiles all test sources and pushes the resulting binaries to `prod/testsuite-base`. As a result, the branch always reflects the latest test definitions from `main` — you do not need to recompile or manually pull updates.
+
+<Tip>
+  If you are integrating wasi-testsuite into your own CI pipeline, clone `prod/testsuite-base` rather than `main`. Your pipeline will always pick up the latest tests and binaries without needing a compiler in the build environment.
+</Tip>
+
+## When you need to compile from source
+
+Use `main` and compile the binaries yourself if you are:
+
+- Adding or modifying test cases
+- Working on build scripts or the test runner
+- Testing changes before they land on `prod/testsuite-base`
+
+See [Building tests](/writing-tests/building-tests) for instructions on compiling test sources.

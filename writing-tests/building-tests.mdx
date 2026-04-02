@@ -1,0 +1,137 @@
+---
+title: "Building tests"
+description: Compile test source files into .wasm binaries using the wasi-sdk (C) or Rust toolchain.
+---
+
+Each language has its own `build.py` script that compiles source files and copies the resulting binaries — along with their `.json` specs and fixture directories — into a generated `testsuite/<target>/` directory.
+
+Before you can run the build scripts you need a toolchain that targets `wasm32-wasip1` or `wasm32-wasip3`.
+
+## Toolchain setup
+
+<Tabs>
+  <Tab title="C (wasi-sdk)">
+    C tests are compiled with [wasi-sdk](https://github.com/WebAssembly/wasi-sdk), which bundles a Clang/LLVM toolchain that targets WASI.
+
+    The following commands install wasi-sdk 27 on x86-64 Linux:
+
+    ```bash
+    export WASI_SDK=wasi-sdk-27.0-x86_64-linux
+    curl -LO https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/$WASI_SDK.tar.gz
+    tar xvf $WASI_SDK.tar.gz
+    export WASI_SDK_PATH=`pwd`/$WASI_SDK
+    export CC="${WASI_SDK_PATH}/bin/clang"
+    export CXX="${WASI_SDK_PATH}/bin/clang++"
+    ```
+
+    The `build.py` script reads the `CC` environment variable, so setting it to the wasi-sdk clang is all that is needed.
+  </Tab>
+  <Tab title="Rust (rustup)">
+    Rust tests use [rustup](https://rustup.rs/) to manage toolchain channels and targets.
+
+    ```bash
+    rustup update
+    rustup toolchain install stable
+    rustup toolchain install nightly    # needed for wasip3, for now
+    rustup default stable
+    rustup +stable target add wasm32-wasip1
+    rustup +nightly target add wasm32-wasip2  # for wasip3
+    ```
+
+    <Note>
+      Until wasip3 is released as a stable Rust target, the build script compiles wasip3 tests using the `wasm32-wasip2` triple on the nightly channel. The script selects the right channel automatically based on the WASI version being built — you do not need to specify it manually.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Running the build scripts
+
+<Tabs>
+  <Tab title="C">
+    From the repository root:
+
+    ```bash
+    python3 tests/c/build.py
+    ```
+
+    This compiles every `tests/c/src/*.c` file for the `wasm32-wasip1` target and places the output in `tests/c/testsuite/wasm32-wasip1/`.
+
+    To see every command the script will run without actually executing it:
+
+    ```bash
+    python3 tests/c/build.py --verbose --dry-run
+    ```
+
+    To show commands as they execute:
+
+    ```bash
+    python3 tests/c/build.py --verbose
+    ```
+  </Tab>
+  <Tab title="Rust">
+    From the repository root:
+
+    ```bash
+    python3 tests/rust/build.py
+    ```
+
+    This compiles tests for both `wasm32-wasip1` and `wasm32-wasip3`, placing output in `tests/rust/testsuite/wasm32-wasip1/` and `tests/rust/testsuite/wasm32-wasip3/` respectively.
+
+    To preview without executing:
+
+    ```bash
+    python3 tests/rust/build.py --verbose --dry-run
+    ```
+
+    To build optimised binaries:
+
+    ```bash
+    python3 tests/rust/build.py --release
+    ```
+  </Tab>
+</Tabs>
+
+## What the build scripts do
+
+Both scripts follow the same pattern:
+
+1. For each target, create a `testsuite/<target>/` output directory.
+2. Write a `manifest.json` into that directory naming the test suite.
+3. For each source file, compile it to a `.wasm` binary in the output directory.
+4. If a matching `.json` spec exists, copy it alongside the binary.
+5. If the spec references any `dirs`, copy those fixture directories into the output as well.
+
+The C script (`tests/c/build.py`) additionally skips compilation if the source file (and its `.json`) is older than the existing output binary, so only changed tests are recompiled.
+
+## Output structure
+
+After a successful build, the testsuite directories look like this:
+
+```
+tests/
+├── c/
+│   └── testsuite/
+│       └── wasm32-wasip1/
+│           ├── manifest.json
+│           ├── lseek.wasm
+│           ├── lseek.json
+│           └── fs-tests.dir/
+└── rust/
+    └── testsuite/
+        ├── wasm32-wasip1/
+        │   ├── manifest.json
+        │   ├── fd_readdir.wasm
+        │   ├── fd_readdir.json
+        │   └── fs-tests.dir/
+        └── wasm32-wasip3/
+            ├── manifest.json
+            ├── filesystem-stat.wasm
+            ├── filesystem-stat.json
+            └── fs-tests.dir/
+```
+
+The test runner points at one of these `testsuite/<target>/` directories and executes every `.wasm` it finds there.
+
+## Checking CI
+
+If you are unsure what a build step should look like, the CI workflow at `.github/workflows/compile-tests.yml` is the authoritative reference for exactly how the project builds all targets across both toolchains.

@@ -1,0 +1,51 @@
+---
+title: "Runtime adapters"
+description: How the test runner integrates with WebAssembly runtimes.
+---
+
+A runtime adapter is a Python module that translates test parameters into a command line the test runner can execute. When the runner needs to run a `.wasm` test binary, it asks the adapter to produce the exact `argv` list — including the runtime executable, any flags for environment variables, preopened directories, and the path to the binary itself. The adapter also reports which WASI versions and WASI worlds the runtime supports, and what version of the runtime is installed.
+
+This design keeps the test runner runtime-agnostic. Adding support for a new runtime requires only a single Python file, with no changes to the runner itself.
+
+<CardGroup cols={2}>
+  <Card title="Supported runtimes" icon="server" href="/adapters/supported-runtimes">
+    Browse built-in adapters for wasmtime, WasmEdge, WAMR, wazero, pywasm, and Wizard.
+  </Card>
+  <Card title="Writing a custom adapter" icon="code" href="/adapters/writing-an-adapter">
+    Learn how to integrate any WASI runtime into the test harness.
+  </Card>
+</CardGroup>
+
+## What an adapter provides
+
+Every adapter exposes five functions to the test runner:
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `get_name()` | `str` | Human-readable name for the runtime, used in test reports. |
+| `get_version()` | `str` | Version string of the installed runtime binary. |
+| `get_wasi_versions()` | `List[str]` | WASI target triples the runtime supports, e.g. `wasm32-wasip1`. |
+| `get_wasi_worlds()` | `List[str]` | WASI worlds the runtime supports, e.g. `wasi:cli/command`. |
+| `compute_argv(...)` | `List[str]` | Full `argv` list for running a single test binary in a subprocess. |
+
+`compute_argv` is the core of every adapter. It receives the path to the `.wasm` test binary, the test's required environment (arguments, environment variables, and preopened directories), the list of active WASI proposals, the WASI world, and the WASI version — and it returns the complete command the runner passes to `subprocess.run`.
+
+## How the runner uses adapters
+
+When you pass an adapter file to the test runner with `--runtime-adapter`, the runner loads the file as a Python module and calls each of the four metadata functions once. It then skips any test whose required WASI version or world is not in the adapter's supported sets. For every remaining test, it calls `compute_argv` to get the command, runs it in a subprocess, and evaluates the result against the test's spec.
+
+Each test runs in its own fresh subprocess. The adapter is not involved in result evaluation — it only produces the command line.
+
+## Overriding the runtime binary
+
+All built-in adapters read the runtime executable path from an environment variable, with a sensible default. This lets you point the runner at a different build of a runtime or pass extra flags without editing any source files:
+
+```bash
+# Use a custom wasmtime build
+WASMTIME=/opt/wasmtime-dev/wasmtime ./run-tests --runtime-adapter adapters/wasmtime.py
+
+# Pass extra flags — shlex.split() handles the quoting
+WASMTIME="wasmtime --wasm-features all" ./run-tests --runtime-adapter adapters/wasmtime.py
+```
+
+See [Supported runtimes](/adapters/supported-runtimes) for the environment variable name for each built-in adapter.

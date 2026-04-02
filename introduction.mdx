@@ -1,0 +1,59 @@
+---
+title: "Introduction"
+description: "What WASI Testsuite is, what it tests, and which runtimes it supports."
+---
+
+WASI Testsuite is an open-source repository maintained by the WebAssembly community. It provides a collection of test cases for the [WebAssembly System Interface (WASI)](https://github.com/WebAssembly/WASI) and a Python-based test runner that executes those tests against any WebAssembly runtime you point it at.
+
+<Note>
+  WASI has not yet reached version 1.0 stability. This is a living project — tests and the runner evolve alongside the spec. Expect ongoing additions as proposals mature.
+</Note>
+
+## What WASI is
+
+WASI is a modular, capability-based API standard that gives WebAssembly modules access to system resources such as files, clocks, environment variables, sockets, and standard I/O. Rather than a single monolithic API, it is a collection of standardized interfaces grouped into proposals.
+
+The testsuite currently covers two generations of the standard:
+
+- **WASI preview 1** — the stable, widely-implemented generation. Most production runtimes support it today. Spec: [WASI 0.1 preview1 docs](https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview1/docs.md).
+- **WASI preview 3** — the forthcoming generation built on the Component Model, with a richer type system and composability story. Spec: [wasi.dev roadmap](https://wasi.dev/roadmap).
+
+The testsuite does not include tests for other in-progress proposals or experimental APIs, though the test runner can execute tests from external repositories (for example, the [wasi-threads test suite](https://github.com/WebAssembly/wasi-threads/tree/main/test)).
+
+## What the repository provides
+
+<CardGroup cols={2}>
+  <Card title="Test cases" icon="vial">
+    Compiled `.wasm` binaries and JSON manifests covering WASI preview 1 and preview 3 system calls, ready to run without a compiler toolchain.
+  </Card>
+  <Card title="Test runner" icon="play">
+    A Python script (`run-tests`) that discovers test suites, invokes runtime adapters, and reports pass/fail results with optional JSON output.
+  </Card>
+  <Card title="Runtime adapters" icon="plug">
+    Python adapter scripts in `adapters/` that map the runner's generic interface to each runtime's specific CLI. Six adapters ship out of the box.
+  </Card>
+  <Card title="Build scripts" icon="wrench">
+    Source code and build infrastructure for compiling tests from C and Rust, used by CI to regenerate the precompiled binaries on every commit.
+  </Card>
+</CardGroup>
+
+## Supported runtimes
+
+The repository ships adapters for six runtimes:
+
+| Runtime | Adapter file | Notes |
+|---|---|---|
+| [wasmtime](https://wasmtime.dev) | `adapters/wasmtime.py` | Bytecode Alliance's production runtime |
+| [WasmEdge](https://wasmedge.org) | `adapters/wasmedge.py` | CNCF sandbox runtime for edge and cloud |
+| [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime) | `adapters/wasm-micro-runtime.py` | WebAssembly Micro Runtime for embedded |
+| [wazero](https://wazero.io) | `adapters/wazero.py` | Zero-dependency Go runtime |
+| [pywasm](https://github.com/mohanson/pywasm) | `adapters/pywasm.py` | Pure Python interpreter |
+| [Wizard](https://github.com/titzer/wizard-engine) | `adapters/wizard.py` | Research runtime from Carnegie Mellon |
+
+Any runtime not listed above can be supported by writing a new adapter. See the [runtime adapters](/adapters/overview) section for details.
+
+## Ready to run tests?
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Clone the repository, install the Python dependencies, and run your first compliance tests in minutes.
+</Card>

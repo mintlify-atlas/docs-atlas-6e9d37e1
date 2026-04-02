@@ -1,0 +1,206 @@
+---
+title: "Writing a custom adapter"
+description: Integrate any WASI runtime into the test harness.
+---
+
+An adapter is a plain Python file that the test runner loads as a module. You place it anywhere on disk and pass its path to `--runtime-adapter`. No installation step is required — the runner imports it directly with `importlib`.
+
+<Note>
+  The adapter Python API is **not** guaranteed to be stable for external use. The function signatures documented here reflect the current implementation and may change between releases of the testsuite.
+</Note>
+
+## Required functions
+
+Your adapter must export five functions. The runner will call them in the order described below.
+
+### `get_name`
+
+```python
+def get_name() -> str:
+```
+
+Returns a short, human-readable name for the runtime. The runner uses this string in test reports and log output.
+
+**Example:** `return "wasmtime"`
+
+---
+
+### `get_version`
+
+```python
+def get_version() -> str:
+```
+
+Returns the version string of the runtime binary that is currently installed. The runner records this alongside test results so that results can be compared across versions.
+
+The conventional approach is to invoke the runtime with `--version` and parse the output:
+
+```python
+def get_version() -> str:
+    result = subprocess.run(
+        WASMTIME[0:1] + ["--version"],
+        encoding="UTF-8",
+        capture_output=True,
+        check=True,
+    )
+    output = result.stdout.splitlines()[0].split(" ")
+    return output[1]
+```
+
+---
+
+### `get_wasi_versions`
+
+```python
+def get_wasi_versions() -> List[str]:
+```
+
+Returns the list of WASI target triples this runtime supports. The runner uses this list to skip tests that target a WASI version the runtime does not implement.
+
+Valid values currently used in the testsuite:
+
+- `"wasm32-wasip1"` — WASI preview 1
+- `"wasm32-wasip3"` — WASI preview 3
+
+**Example:** `return ["wasm32-wasip1"]`
+
+---
+
+### `get_wasi_worlds`
+
+```python
+def get_wasi_worlds() -> List[str]:
+```
+
+Returns the list of WASI worlds this runtime supports. The runner filters tests by world in the same way it filters by WASI version.
+
+Common values:
+
+- `"wasi:cli/command"` — standard command-line process interface
+- `"wasi:http/service"` — HTTP request handling (preview 3)
+
+**Example:** `return ["wasi:cli/command"]`
+
+---
+
+### `compute_argv`
+
+```python
+def compute_argv(
+    test_path: str,
+    args_env_dirs: Tuple[List[str], Dict[str, str], List[Tuple[Path, str]]],
+    proposals: List[str],
+    wasi_world: str,
+    wasi_version: str,
+) -> List[str]:
+```
+
+Builds and returns the complete `argv` list for running a single test. The runner passes this list directly to `subprocess.run`.
+
+<ParamField path="body.test_path" type="string" required>
+  Absolute path to the `.wasm` test binary to execute.
+</ParamField>
+
+<ParamField path="body.args_env_dirs" type="tuple" required>
+  A three-element tuple containing:
+
+  - `args` — `List[str]`: command-line arguments to pass to the wasm module.
+  - `env` — `Dict[str, str]`: environment variables the module should see, as `key → value` pairs.
+  - `dirs` — `List[Tuple[Path, str]]`: preopened directory mappings, each as `(host_path, guest_path)`.
+</ParamField>
+
+<ParamField path="body.proposals" type="string[]" required>
+  List of active WASI proposal identifiers that the test requires (e.g. `["wasi-threads"]`). Your adapter may use these to conditionally add runtime flags.
+</ParamField>
+
+<ParamField path="body.wasi_world" type="string" required>
+  The WASI world the test targets (e.g. `"wasi:cli/command"`).
+</ParamField>
+
+<ParamField path="body.wasi_version" type="string" required>
+  The WASI version triple the test targets (e.g. `"wasm32-wasip1"`).
+</ParamField>
+
+## Reference implementation
+
+The `adapters/wasmtime.py` adapter is the canonical example. It demonstrates how to read the binary path from an environment variable, map all test parameters onto CLI flags, and handle WASI version–specific options:
+
+```python
+import os
+import shlex
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+WASMTIME = shlex.split(os.getenv("WASMTIME", "wasmtime"))
+
+
+def get_name() -> str:
+    return "wasmtime"
+
+
+def get_version() -> str:
+    result = subprocess.run(
+        WASMTIME[0:1] + ["--version"],
+        encoding="UTF-8",
+        capture_output=True,
+        check=True,
+    )
+    output = result.stdout.splitlines()[0].split(" ")
+    return output[1]
+
+
+def get_wasi_versions() -> List[str]:
+    return ["wasm32-wasip1", "wasm32-wasip3"]
+
+
+def get_wasi_worlds() -> List[str]:
+    return ["wasi:cli/command", "wasi:http/service"]
+
+
+def compute_argv(
+    test_path: str,
+    args_env_dirs: Tuple[List[str], Dict[str, str], List[Tuple[Path, str]]],
+    proposals: List[str],
+    wasi_world: str,
+    wasi_version: str,
+) -> List[str]:
+    argv = []
+    argv += WASMTIME
+    args, env, dirs = args_env_dirs
+    for k, v in env.items():
+        argv += ["--env", f"{k}={v}"]
+    for host, guest in dirs:
+        argv += ["--dir", f"{host}::{guest}"]
+    argv += [test_path]
+    argv += args
+    _add_wasi_version_options(argv, wasi_version, proposals, wasi_world)
+    return argv
+```
+
+Key patterns to follow:
+
+- **Read the binary from an environment variable.** Use `shlex.split(os.getenv("MY_RUNTIME", "my-runtime"))` so users can override the path or add flags without editing the file.
+- **Map `env` items to `--env KEY=VALUE`.** Most WASI runtimes use this flag name; adjust it to match your runtime's CLI.
+- **Map `dirs` tuples to `--dir host::guest`.** The separator varies by runtime — check your runtime's documentation.
+- **Append `test_path` and then `args`.** The wasm binary comes before the arguments passed to the module.
+
+## Using your adapter
+
+Once you have a file, pass it to the runner with `--runtime-adapter`:
+
+```bash
+./run-tests --runtime-adapter /path/to/my-runtime.py
+```
+
+You can combine it with other flags as normal:
+
+```bash
+./run-tests \
+  --runtime-adapter /path/to/my-runtime.py \
+  --json-output-location results.json
+```
+
+<Tip>
+  If your runtime has broad WASI coverage and a stable open-source release, consider contributing the adapter to the testsuite repository. Open a pull request in [WebAssembly/wasi-testsuite](https://github.com/WebAssembly/wasi-testsuite) with your adapter file and a brief description of the runtime.
+</Tip>
